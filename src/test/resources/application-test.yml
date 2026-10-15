@@ -12,6 +12,6 @@ spring:
       mode: always
 
 nimbus:
-  seed-path: classpath:seed/readings.csv
+  seed-path: classpath:seed/sensor_readings.json
   llm:
     api-key: ""

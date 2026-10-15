@@ -12,4 +12,4 @@ spring:
       mode: always
 
 nimbus:
-  seed-path: data/seed/readings.csv
+  seed-path: classpath:seed/sensor_readings.json

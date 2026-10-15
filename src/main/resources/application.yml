@@ -20,10 +20,10 @@ spring:
       write-dates-as-timestamps: false
 
 nimbus:
-  seed-path: data/seed/readings.csv
+  seed-path: classpath:seed/sensor_readings.json
   alert:
-    threshold-high-c: "5.0"
-    threshold-high-resolve-c: "4.0"
+    threshold-high-c: "8.0"
+    threshold-high-resolve-c: "7.0"
     threshold-freeze-c: "2.0"
     threshold-freeze-resolve-c: "3.0"
     sustain-duration-minutes: 15

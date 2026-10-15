@@ -17,4 +17,6 @@ public interface SensorReadingRepository extends JpaRepository<SensorReading, Lo
             String truckId, Instant from, Instant to);
 
     List<SensorReading> findByTruckIdOrderByRecordedAtAsc(String truckId);
+
+    void deleteByTruckId(String truckId);
 }

@@ -50,4 +50,4 @@ That profile sets `base-url` to `https://api.deepseek.com/v1` and `model` to `de
 
 ## Seed data
 
-`data/seed/readings.csv` (also under `src/main/resources/seed/` for the classpath).
+`src/main/resources/seed/sensor_readings.json` — the starter-kit hour for trucks T-01 through T-05. Replay sorts it, then uses the same ingest path as a live reading. Humidity is ignored.

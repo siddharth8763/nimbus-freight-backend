@@ -13,4 +13,6 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findByStatusOrderByStartedAtDesc(AlertStatus status);
 
     List<Alert> findByTruckIdOrderByStartedAtDesc(String truckId);
+
+    void deleteByTruckId(String truckId);
 }

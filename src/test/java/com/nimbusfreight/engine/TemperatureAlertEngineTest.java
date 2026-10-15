@@ -35,9 +35,9 @@ class TemperatureAlertEngineTest {
 
     @Test
     void warmBlipDoesNotAlert() {
-        feed(0, "7.5");
-        feed(10, "8.0");
-        feed(15, "4.0");
+        feed(0, "9.2");
+        feed(10, "9.4");
+        feed(15, "6.0");
 
         assertTrue(sink.alerts.isEmpty());
         assertNull(state.getWarmSince());
@@ -47,37 +47,37 @@ class TemperatureAlertEngineTest {
     @Test
     void sustainedWarmOpensOnceAndTracksPeak() {
         feed(0, "9.0");
-        feed(10, "7.0");
-        feed(15, "6.5");
-        feed(20, "8.0");
+        feed(10, "9.4");
+        feed(15, "10.2");
+        feed(20, "8.5");
 
         assertEquals(1, sink.alerts.size());
         MemorySink.Row alert = sink.alerts.get(0);
         assertEquals(AlertType.HIGH_TEMP, alert.type);
         assertEquals(AlertStatus.OPEN, alert.status);
-        assertEquals(new BigDecimal("9.0"), alert.extreme);
+        assertEquals(new BigDecimal("10.2"), alert.extreme);
         assertEquals(t0, alert.startedAt);
         assertEquals(alert.id, state.getOpenHighAlertId());
     }
 
     @Test
     void exactlyFifteenMinutesOpensWarmAlert() {
-        feed(0, "6.0");
-        feed(15, "6.0");
+        feed(0, "8.5");
+        feed(15, "8.5");
         assertEquals(1, sink.alerts.size());
     }
 
     @Test
     void fourteenMinutesDoesNotOpen() {
-        feed(0, "6.0");
-        feed(14, "6.0");
+        feed(0, "8.5");
+        feed(14, "8.5");
         assertTrue(sink.alerts.isEmpty());
     }
 
     @Test
-    void boundaryAtFiveCelsiusIsNotWarm() {
-        feed(0, "5.0");
-        feed(20, "5.0");
+    void boundaryAtEightCelsiusIsNotWarm() {
+        feed(0, "8.0");
+        feed(20, "8.0");
         assertTrue(sink.alerts.isEmpty());
         assertNull(state.getWarmSince());
     }
@@ -115,10 +115,10 @@ class TemperatureAlertEngineTest {
 
     @Test
     void warmAlertResolvesAfterHysteresis() {
-        feed(0, "8.0");
-        feed(15, "8.0");
-        feed(20, "3.5");
-        feed(30, "3.4");
+        feed(0, "9.0");
+        feed(15, "9.0");
+        feed(20, "6.5");
+        feed(30, "6.4");
 
         assertEquals(1, sink.alerts.size());
         assertEquals(AlertStatus.RESOLVED, sink.alerts.get(0).status);
@@ -128,12 +128,12 @@ class TemperatureAlertEngineTest {
 
     @Test
     void newWarmEpisodeAfterResolveCreatesAnotherAlert() {
-        feed(0, "8.0");
-        feed(15, "8.0");
-        feed(20, "3.5");
-        feed(30, "3.4");
-        feed(40, "7.0");
-        feed(55, "7.5");
+        feed(0, "9.0");
+        feed(15, "9.0");
+        feed(20, "6.5");
+        feed(30, "6.4");
+        feed(40, "9.1");
+        feed(55, "9.4");
 
         assertEquals(2, sink.alerts.size());
         assertEquals(AlertStatus.RESOLVED, sink.alerts.get(0).status);
@@ -143,10 +143,10 @@ class TemperatureAlertEngineTest {
 
     @Test
     void gapLongerThanThirtyMinutesResetsWarmTimer() {
-        feed(0, "8.0");
-        feed(10, "8.0");
-        feed(41, "8.0");
-        feed(50, "8.0");
+        feed(0, "9.0");
+        feed(10, "9.0");
+        feed(41, "9.0");
+        feed(50, "9.0");
 
         assertTrue(sink.alerts.isEmpty());
         assertEquals(t0.plusSeconds(41 * 60), state.getWarmSince());
@@ -154,9 +154,9 @@ class TemperatureAlertEngineTest {
 
     @Test
     void gapOfExactlyThirtyMinutesDoesNotReset() {
-        feed(0, "8.0");
-        feed(10, "8.0");
-        feed(40, "8.0");
+        feed(0, "9.0");
+        feed(10, "9.0");
+        feed(40, "9.0");
 
         assertEquals(1, sink.alerts.size());
         assertEquals(t0, sink.alerts.get(0).startedAt);
@@ -164,8 +164,8 @@ class TemperatureAlertEngineTest {
 
     @Test
     void freezeSustainedWhileWarmAlertOpenSupersedesIt() {
-        feed(0, "8.0");
-        feed(15, "8.0");
+        feed(0, "9.0");
+        feed(15, "9.0");
         feed(20, "1.0");
         feed(35, "0.5");
 
@@ -180,8 +180,8 @@ class TemperatureAlertEngineTest {
 
     @Test
     void shortFreezeBlipDoesNotResolveOpenWarmAlert() {
-        feed(0, "8.0");
-        feed(15, "8.0");
+        feed(0, "9.0");
+        feed(15, "9.0");
         feed(20, "1.0");
         feed(25, "4.0");
 

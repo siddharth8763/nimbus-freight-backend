@@ -6,6 +6,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -14,6 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -23,6 +28,7 @@ public class SeedReplayService {
 
     private final ReadingIngestService ingest;
     private final String seedPath;
+    private final ObjectMapper json = new ObjectMapper();
 
     public SeedReplayService(ReadingIngestService ingest, @Value("${nimbus.seed-path}") String seedPath) {
         this.ingest = ingest;
@@ -55,31 +61,67 @@ public class SeedReplayService {
 
     private List<SeedRow> loadRows() throws IOException {
         try (BufferedReader reader = open()) {
-            List<SeedRow> rows = new ArrayList<>();
-            String line;
-            boolean header = true;
-            while ((line = reader.readLine()) != null) {
-                String trimmed = line.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                    continue;
-                }
-                if (header && trimmed.toLowerCase().startsWith("truck_id")) {
-                    header = false;
-                    continue;
-                }
-                header = false;
-                String[] parts = trimmed.split(",");
-                if (parts.length < 3) {
-                    continue;
-                }
-                rows.add(new SeedRow(
-                        parts[0].trim(),
-                        new BigDecimal(parts[1].trim()),
-                        Instant.parse(parts[2].trim())
-                ));
+            if (jsonSeed()) {
+                return loadJson(reader);
             }
-            return rows;
+            return loadCsv(reader);
         }
+    }
+
+    private List<SeedRow> loadJson(BufferedReader reader) throws IOException {
+        JsonNode root = json.readTree(reader);
+        JsonNode readings = root.get("readings");
+        if (readings == null || !readings.isArray()) {
+            return List.of();
+        }
+        List<SeedRow> rows = new ArrayList<>();
+        for (JsonNode reading : readings) {
+            rows.add(new SeedRow(
+                    reading.get("truck_id").asText(),
+                    reading.get("temperature_c").decimalValue(),
+                    parseTimestamp(reading.get("timestamp").asText())
+            ));
+        }
+        return rows;
+    }
+
+    private List<SeedRow> loadCsv(BufferedReader reader) throws IOException {
+        List<SeedRow> rows = new ArrayList<>();
+        String line;
+        boolean header = true;
+        while ((line = reader.readLine()) != null) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue;
+            }
+            if (header && trimmed.toLowerCase().startsWith("truck_id")) {
+                header = false;
+                continue;
+            }
+            header = false;
+            String[] parts = trimmed.split(",");
+            if (parts.length < 3) {
+                continue;
+            }
+            rows.add(new SeedRow(
+                    parts[0].trim(),
+                    new BigDecimal(parts[1].trim()),
+                    parseTimestamp(parts[2].trim())
+            ));
+        }
+        return rows;
+    }
+
+    private Instant parseTimestamp(String raw) {
+        String trimmed = raw.trim();
+        if (trimmed.endsWith("Z") || trimmed.contains("+") || trimmed.lastIndexOf('-') > 10) {
+            return Instant.parse(trimmed);
+        }
+        return LocalDateTime.parse(trimmed).toInstant(ZoneOffset.UTC);
+    }
+
+    private boolean jsonSeed() {
+        return seedPath.toLowerCase().endsWith(".json");
     }
 
     private BufferedReader open() throws IOException {
@@ -92,16 +134,16 @@ public class SeedReplayService {
         if (Files.exists(configured)) {
             return Files.newBufferedReader(configured);
         }
-        Path fromRepoRoot = Path.of("data/seed/readings.csv");
+        Path fromRepoRoot = Path.of("starter_kit/data/sensor_readings.json");
         if (Files.exists(fromRepoRoot)) {
             return Files.newBufferedReader(fromRepoRoot);
         }
-        Path fromBackendModule = Path.of("../data/seed/readings.csv");
+        Path fromBackendModule = Path.of("../starter_kit/data/sensor_readings.json");
         if (Files.exists(fromBackendModule)) {
             return Files.newBufferedReader(fromBackendModule);
         }
         return new BufferedReader(new InputStreamReader(
-                new ClassPathResource("seed/readings.csv").getInputStream(), StandardCharsets.UTF_8));
+                new ClassPathResource("seed/sensor_readings.json").getInputStream(), StandardCharsets.UTF_8));
     }
 
     private record SeedRow(String truckId, BigDecimal temperatureC, Instant recordedAt) {

@@ -7,8 +7,8 @@ import java.math.BigDecimal;
 @ConfigurationProperties(prefix = "nimbus.alert")
 public class AlertPolicy {
 
-    private BigDecimal thresholdHighC = new BigDecimal("5.0");
-    private BigDecimal thresholdHighResolveC = new BigDecimal("4.0");
+    private BigDecimal thresholdHighC = new BigDecimal("8.0");
+    private BigDecimal thresholdHighResolveC = new BigDecimal("7.0");
     private BigDecimal thresholdFreezeC = new BigDecimal("2.0");
     private BigDecimal thresholdFreezeResolveC = new BigDecimal("3.0");
     private int sustainDurationMinutes = 15;

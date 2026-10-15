@@ -46,39 +46,45 @@ class FleetBehaviorTest {
     void replaySeedMatchesScenariosAndIsIdempotent() throws Exception {
         SeedReplayService.ReplayResult first = replay.replay();
 
-        assertEquals(1, first.rejectedInvalid());
-        assertEquals(1, first.duplicates());
+        assertEquals(54, first.rowsRead());
+        assertEquals(54, first.processed());
+        assertEquals(0, first.duplicates());
         assertEquals(0, first.storedOutOfOrder());
-        assertTrue(first.processed() > 0);
+        assertEquals(0, first.rejectedInvalid());
 
-        TruckSummaryResponse aurora = fleet.truck("NF-01");
-        TruckSummaryResponse borealis = fleet.truck("NF-02");
-        TruckSummaryResponse cirrus = fleet.truck("NF-03");
-        TruckSummaryResponse drift = fleet.truck("NF-04");
-        TruckSummaryResponse ember = fleet.truck("NF-05");
+        TruckSummaryResponse sustained = fleet.truck("T-01");
+        TruckSummaryResponse blip = fleet.truck("T-02");
+        TruckSummaryResponse steady = fleet.truck("T-03");
+        TruckSummaryResponse gap = fleet.truck("T-04");
+        TruckSummaryResponse shuffled = fleet.truck("T-05");
 
-        assertEquals(TruckStatus.FREEZING, aurora.status());
-        assertEquals(TruckStatus.ALERT_HIGH, borealis.status());
-        assertEquals(TruckStatus.ALERT_LOW, cirrus.status());
-        assertEquals(TruckStatus.WARMING, drift.status());
-        assertEquals(TruckStatus.ALERT_HIGH, ember.status());
+        assertEquals(TruckStatus.ALERT_HIGH, sustained.status());
+        assertEquals(TruckStatus.OK, blip.status());
+        assertEquals(TruckStatus.OK, steady.status());
+        assertEquals(TruckStatus.ALERT_HIGH, gap.status());
+        assertEquals(TruckStatus.ALERT_HIGH, shuffled.status());
 
-        List<AlertResponse> borealisAlerts = fleet.alerts(null, "NF-02");
-        assertEquals(2, borealisAlerts.size());
-        AlertResponse borealisOpen = borealisAlerts.stream().filter(alert -> alert.status() == AlertStatus.OPEN).findFirst().orElseThrow();
-        AlertResponse borealisResolved = borealisAlerts.stream().filter(alert -> alert.status() == AlertStatus.RESOLVED).findFirst().orElseThrow();
-        assertDecimal("8.6", borealisOpen.peakTempC());
-        assertDecimal("9.2", borealisResolved.peakTempC());
+        List<AlertResponse> sustainedAlerts = fleet.alerts(null, "T-01");
+        assertEquals(1, sustainedAlerts.size());
+        assertEquals(AlertType.HIGH_TEMP, sustainedAlerts.get(0).type());
+        assertEquals(AlertStatus.OPEN, sustainedAlerts.get(0).status());
+        assertEquals(Instant.parse("2026-07-20T08:10:00Z"), sustainedAlerts.get(0).startedAt());
+        assertDecimal("9.6", sustainedAlerts.get(0).peakTempC());
 
-        List<AlertResponse> cirrusAlerts = fleet.alerts(null, "NF-03");
-        assertEquals(1, cirrusAlerts.size());
-        assertEquals(AlertType.LOW_TEMP, cirrusAlerts.get(0).type());
-        assertDecimal("0.2", cirrusAlerts.get(0).minTempC());
+        assertTrue(fleet.alerts(null, "T-02").isEmpty());
+        assertTrue(fleet.alerts(null, "T-03").isEmpty());
 
-        assertTrue(fleet.alerts(null, "NF-01").isEmpty());
-        assertTrue(fleet.alerts(null, "NF-04").isEmpty());
-        assertEquals(1, fleet.alerts(null, "NF-05").size());
-        assertEquals(AlertType.HIGH_TEMP, ember.openAlert().type());
+        List<AlertResponse> gapAlerts = fleet.alerts(null, "T-04");
+        assertEquals(1, gapAlerts.size());
+        assertEquals(AlertStatus.OPEN, gapAlerts.get(0).status());
+        assertEquals(Instant.parse("2026-07-20T08:25:00Z"), gapAlerts.get(0).startedAt());
+        assertDecimal("9.1", gapAlerts.get(0).peakTempC());
+
+        List<AlertResponse> shuffledAlerts = fleet.alerts(null, "T-05");
+        assertEquals(1, shuffledAlerts.size());
+        assertEquals(AlertType.HIGH_TEMP, shuffled.openAlert().type());
+        assertEquals(Instant.parse("2026-07-20T08:10:00Z"), shuffledAlerts.get(0).startedAt());
+        assertDecimal("9.6", shuffledAlerts.get(0).peakTempC());
 
         long alertCount = alerts.count();
         long readingCount = readings.count();
@@ -93,29 +99,29 @@ class FleetBehaviorTest {
     @Test
     void duplicateTimestampIsIgnored() {
         Instant when = Instant.parse("2026-10-02T00:00:00Z");
-        assertEquals(ReadingIngestService.IngestResult.PROCESSED, ingest.ingest("NF-01", new BigDecimal("4.0"), when));
-        assertEquals(ReadingIngestService.IngestResult.DUPLICATE, ingest.ingest("NF-01", new BigDecimal("12.0"), when));
-        assertEquals(1, readings.findByTruckIdOrderByRecordedAtAsc("NF-01").size());
-        assertEquals(0, new BigDecimal("4.0").compareTo(readings.findByTruckIdOrderByRecordedAtAsc("NF-01").get(0).getTemperatureC()));
+        assertEquals(ReadingIngestService.IngestResult.PROCESSED, ingest.ingest("T-01", new BigDecimal("4.0"), when));
+        assertEquals(ReadingIngestService.IngestResult.DUPLICATE, ingest.ingest("T-01", new BigDecimal("12.0"), when));
+        assertEquals(1, readings.findByTruckIdOrderByRecordedAtAsc("T-01").size());
+        assertEquals(0, new BigDecimal("4.0").compareTo(readings.findByTruckIdOrderByRecordedAtAsc("T-01").get(0).getTemperatureC()));
     }
 
     @Test
     void outOfOrderReadingIsStoredButDoesNotMoveState() {
         Instant later = Instant.parse("2026-10-02T02:00:00Z");
         Instant earlier = Instant.parse("2026-10-02T01:00:00Z");
-        ingest.ingest("NF-01", new BigDecimal("4.0"), later);
-        assertEquals(ReadingIngestService.IngestResult.STORED_OUT_OF_ORDER, ingest.ingest("NF-01", new BigDecimal("20.0"), earlier));
+        ingest.ingest("T-01", new BigDecimal("4.0"), later);
+        assertEquals(ReadingIngestService.IngestResult.STORED_OUT_OF_ORDER, ingest.ingest("T-01", new BigDecimal("20.0"), earlier));
 
-        assertEquals(2, readings.findByTruckIdOrderByRecordedAtAsc("NF-01").size());
-        assertTrue(alerts.findByTruckIdOrderByStartedAtDesc("NF-01").isEmpty());
-        assertEquals(TruckStatus.OK, fleet.truck("NF-01").status());
+        assertEquals(2, readings.findByTruckIdOrderByRecordedAtAsc("T-01").size());
+        assertTrue(alerts.findByTruckIdOrderByStartedAtDesc("T-01").isEmpty());
+        assertEquals(TruckStatus.OK, fleet.truck("T-01").status());
     }
 
     @Test
     void invalidReadingIsRejected() {
         assertThrows(InvalidReadingException.class,
-                () -> ingest.ingest("NF-01", new BigDecimal("999"), Instant.parse("2026-10-02T03:00:00Z")));
-        assertTrue(readings.findByTruckIdOrderByRecordedAtAsc("NF-01").isEmpty());
+                () -> ingest.ingest("T-01", new BigDecimal("999"), Instant.parse("2026-10-02T03:00:00Z")));
+        assertTrue(readings.findByTruckIdOrderByRecordedAtAsc("T-01").isEmpty());
     }
 
     private static void assertDecimal(String expected, BigDecimal actual) {

@@ -12,10 +12,10 @@ We need one alert per **sustained** problem on a specific truck, not a page per 
 
 These are product choices, not facts from the brief. They live in `src/main/resources/application.yml` as `nimbus.alert.*`.
 
-1. **Safe band.** Pharma reefers are commonly held at 2–8°C. We warn **early**, inside that band, rather than waiting until cargo is already out of spec at 8°C.
-2. **Too warm.** A warm episode starts when temperature is **strictly above 5.0°C**. A `HIGH_TEMP` alert opens only after the episode has lasted **at least 15 minutes** of sensor time (not “N readings”).
-3. **Too cold.** A freeze episode starts when temperature is **strictly below 2.0°C**. A `LOW_TEMP` alert uses the same 15-minute sustain rule. `2.0°C` itself is not a violation.
-4. **Hysteresis.** A warm alert resolves only after the truck is **at or below 4.0°C for 10 minutes**. A freeze alert resolves only after it is **at or above 3.0°C for 10 minutes**. That stops a truck hovering on the line from opening and closing alerts.
+1. **Safe band.** The provided readings sit around 6–7°C when a truck is fine, and the failures are the samples above 8°C. That matches the usual pharma reefer band of 2–8°C. “Too warm” means **above that band**, not an early warning inside it. A 5°C line would page every truck in the file.
+2. **Too warm.** A warm episode starts when temperature is **strictly above 8.0°C**. A `HIGH_TEMP` alert opens only after the episode has lasted **at least 15 minutes** of sensor time (not “N readings”). Fifteen minutes is long enough to ignore a door-open blip. It is also wall-clock time, so a missing sample does not shrink the episode the way a fixed 5-minute count does.
+3. **Too cold.** A freeze episode starts when temperature is **strictly below 2.0°C**. A `LOW_TEMP` alert uses the same 15-minute sustain rule. `2.0°C` itself is not a violation. The provided hour has no freeze; the rule is still there for the next file.
+4. **Hysteresis.** A warm alert resolves only after the truck is **at or below 7.0°C for 10 minutes**. A freeze alert resolves only after it is **at or above 3.0°C for 10 minutes**. That stops a truck hovering on the line from opening and closing alerts. Dropping back under 8°C for one sample is not recovery.
 5. **One open incident.** A truck has at most one open alert. If a sustained warm problem turns into a sustained freeze (or the reverse) before the first alert resolves normally, the open alert is closed as `SUPERSEDED` and the new type is opened. A short blip into the opposite band does **not** close the current alert.
 6. **Repeat failures are new incidents.** After an alert resolves, a later sustained violation creates a new alert. While an alert is open we only update its peak (warm) or minimum (freeze).
 7. **Gaps.** If the gap between two processed readings is **longer than 30 minutes**, warm and freeze **timers reset**. We do not pretend the cargo stayed hot across an outage. An alert that is already open stays open until later readings resolve it.
@@ -23,7 +23,7 @@ These are product choices, not facts from the brief. They live in `src/main/reso
 9. **Silence is not a temperature alert.** Hours with no telemetry do not by themselves page dispatch. A future `DATA_STALE` signal is the right place for that.
 10. **One policy for every cargo type in v1.** Trucks are tagged `PHARMA` or `GROCERY`, but thresholds are global.
 
-Dashboard **OK** means no open alert, no in-progress episode, and the latest reading sits between the freeze-resolve and warm thresholds (3.0–5.0°C with the defaults). **Warming** and **Freezing** mean an episode has started but has not lasted 15 minutes yet.
+Dashboard **OK** means no open alert, no in-progress episode, and the latest reading sits between the freeze-resolve and warm thresholds (3.0–8.0°C with the defaults). **Warming** and **Freezing** mean an episode has started but has not lasted 15 minutes yet.
 
 ## Questions we would ask operations
 
@@ -37,7 +37,7 @@ Dashboard **OK** means no open alert, no in-progress episode, and the latest rea
 | Option | Why we passed |
 | --- | --- |
 | Alert on 3 consecutive hot readings | Interval is “every few minutes,” not fixed. A time window still means 15 minutes if the sensor slows down. |
-| Single threshold, no hysteresis | Trucks that sit at 5.1 / 4.9 would flap open and resolved. |
+| Single threshold, no hysteresis | Trucks that sit at 8.1 / 7.9 would flap open and resolved. |
 | Bridge a warm episode across a gap | A 40-minute hole is unknown state. Bridging it would page on a guess. |
 | Interpolate missing samples | Same problem, with fake data in the chart. |
 | Page on every out-of-order spike | Late packets would reopen old incidents. We keep them for the chart and ignore them for state. |
@@ -58,7 +58,7 @@ sensor reading
   -> open at most one alert, or resolve / supersede the open one
 ```
 
-Processing is synchronous in the API process. There is no queue. `POST /api/admin/replay-seed` loads `data/seed/readings.csv`, sorts by time, and runs the same ingest path.
+Processing is synchronous in the API process. There is no queue. `POST /api/admin/replay-seed` loads `sensor_readings.json` (the starter file, copied onto the classpath), sorts by time, and runs the same ingest path. T-05 is T-01 shuffled, so the sort is what makes those two alerts match. Humidity is ignored. Re-running the file does not duplicate alerts. On this hour: T-01, T-04, and T-05 each open one warm alert; T-02’s single 8.9°C spike and T-03’s in-band drift stay quiet. None of the three open alerts sees 10 minutes at or below 7°C, so they stay open.
 
 ## If we had more time
 
